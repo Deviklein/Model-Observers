@@ -10,19 +10,21 @@ Model Base class.
 
 import math 
 import numpy as np 
+import os
 import matplotlib.pyplot as plt
+import scipy.io as sio
 
 class baseModel:
-    def __init__(self, dimensions, sigRad):
+    def __init__(self, dimensions, sigRad, matlab = False,):
         '''
         This is a base class to be used for all other classes in the model 
         observer package. It works only for a disk type signal embedded in a
-        2D image.
+        2D or 3D image.
         
         Parameters
         ----------
-        dimensions : TYPE, tuple of length 2.
-            DESCRIPTION. The dimensions of the 2D image (rows,columns).
+        dimensions : TYPE, tuple of length 2 (or 3).
+            DESCRIPTION. The dimensions of the 2D(3D) image (rows,columns,(slices)).
         sigRad : TYPE, int.
             DESCRIPTION. The radius of the disk, which is the signal in this
             model observer class for now.
@@ -36,6 +38,7 @@ class baseModel:
         self.sig_rad = sigRad
         self.rc = int(dimensions[0]/2)
         self.cc = int(dimensions[1]/2)
+        self.mat = matlab
         
     def __repr__(self):
         '''
@@ -49,7 +52,7 @@ class baseModel:
 
         '''
         return(f'{self.__class__.__name__}('
-               f'{self.dim!r}, {self.sig_rad!r})')
+               f'{self.dim!r}, {self.sig_rad!r}, {self.mat!r})')
     
     def __str__(self):
         param1 = f'A {self.dim[0]} row by {self.dim[1]} column image.'
@@ -57,26 +60,53 @@ class baseModel:
         return ('{0}\n{1}'.format(param1,param2))
     
     def coordSpace(self, customDIM = ()):
-        if len(customDIM) == 0:
-            rows = self.dim[0]
-            cols = self.dim[1]
+        if len(self.dim == 2):
+            if len(customDIM) == 0:
+                rows = self.dim[0]
+                cols = self.dim[1]
+            else:
+                rows = customDIM[0]
+                cols = customDIM[1]
+            
+            halfc = math.ceil((cols - 1)/2)
+            halfr = math.ceil((rows - 1)/2)
+            cols_ = np.linspace(-halfc, halfc - 1, cols)
+            rows_ = np.linspace(halfr, -1*(halfr - 1), rows)
+            x, y = np.meshgrid(cols_,rows_)
+            return(x,y)
+        
         else:
-            rows = customDIM[0]
-            cols = customDIM[1]
-
-        halfc = math.ceil((cols - 1)/2)
-        halfr = math.ceil((rows - 1)/2)
-        cols_ = np.linspace(-halfc, halfc - 1, cols)
-        rows_ = np.linspace(halfr, -1*(halfr - 1), rows)
-        x, y = np.meshgrid(cols_,rows_)
-        return(x,y)
+            if len(customDIM) == 0:
+                rows = self.dim[0]
+                cols = self.dim[1]
+                slices = self.dim[2]
+            else:
+                rows = customDIM[0]
+                cols = customDIM[1]
+                slices = customDIM[2]
+            
+            halfc = math.ceil((cols - 1)/2)
+            halfr = math.ceil((rows - 1)/2)
+            halfs = math.ceil((slices -1)/2)
+            cols_ = np.linspace(-halfc, halfc - 1, cols)
+            rows_ = np.linspace(halfr, -1*(halfr - 1), rows)
+            slices_ = np.linspace(halfs, -1*(halfs - 1), slices)
+            x, y, z = np.meshgrid(cols_,rows_, slices_)
+            return(x,y,z)
         
     def freqDom(self,):
-        x,y = self.coordSpace()
-        return (x/self.dim[1], y/self.dim[0])
+        if len(self.dim == 2):
+            x,y = self.coordSpace()
+            return (x/self.dim[1], y/self.dim[0])
+        else:
+            x,y,z = self.coordSpace()
+            return(x/self.dim[1], y/self.dim[0], z/self.dim[2])
     
-    def distance(self, x,y):
-        return (np.sqrt(x**2 + y**2))
+    def distance(self, x,y, z = None):
+        if len(self.dim == 2):
+            return (np.sqrt(x**2 + y**2))
+        else:
+            return (np.sqrt(x**2 + y**2 + z**2))
         
     def NPS(self,f):
         '''
@@ -96,24 +126,36 @@ class baseModel:
             DESCRIPTION. 2D power law filter in the frequency domain.
 
         '''
-        freqs = self.freqDom() #get spatial frequency templates u,v 
-        dist = self.distance(*freqs) #compute the radial spatial frequency
-        dist = np.fft.ifftshift(dist) #shift the DC component to top left corner
-        with np.errstate(divide='ignore'): #prevent warning for dividing by zero
-            temp = 1/(dist**f) #power law filter the spatial frequencies 
-        temp[0,0] = temp[0,1] #replace the dc component (inf) with neighboring value
-        unnorm_filter = np.sqrt(temp) #unnormailzed filter 
-        m_unnorm = unnorm_filter.mean() #mean of template
-        num_pix = (temp.shape[0] * temp.shape[1])
-        var_filter= np.sum(np.abs(unnorm_filter - m_unnorm)**2) / num_pix
-        
-        if var_filter == 0:
-            return(unnorm_filter)
+        if (self.mat) & (len(self.dim) == 3):
+            assert self.dim == (820, 1024, 100)
+            nps = sio.loadmat(os.path.join(os.getcwd(),"powerSpectrum.mat"))
+            return (nps['S'])
+        elif (self.mat) & (len(self.dim) == 2):
+            assert self.dim == (820, 1024)
+            nps = sio.loadmat(os.path.join(os.getcwd(),"powerSpectrum.mat"))
+            return(nps['S'].mean(axis = 2))
+        elif (not self.mat) & (len(self.dim) == 2):
+            freqs = self.freqDom() #get spatial frequency templates u,v 
+            dist = self.distance(*freqs) #compute the radial spatial frequency
+            dist = np.fft.ifftshift(dist) #shift the DC component to top left corner
+            with np.errstate(divide='ignore'): #prevent warning for dividing by zero
+                temp = 1/(dist**f) #power law filter the spatial frequencies 
+            temp[0,0] = temp[0,1] #replace the dc component (inf) with neighboring value
+            unnorm_filter = np.sqrt(temp) #unnormailzed filter 
+            m_unnorm = unnorm_filter.mean() #mean of template
+            num_pix = (temp.shape[0] * temp.shape[1])
+            var_filter= np.sum(np.abs(unnorm_filter - m_unnorm)**2) / num_pix
+            
+            if var_filter == 0:
+                return(unnorm_filter)
+            else:
+                norm_filter = unnorm_filter / np.sqrt(var_filter) #normalize filter 
+                return(norm_filter)
+        elif (not self.mat) & (len(self.dim) == 3):
+            print("to be continued")
         else:
-            norm_filter = unnorm_filter / np.sqrt(var_filter) #normalize filter 
-            return(norm_filter)
-        
-    
+            print('bug issue, check code')
+                        
     def diskSignal(self, normalize = True, customRadius = False,
                    customDIM = None):
         '''
@@ -216,12 +258,10 @@ if __name__ == "__main__":
     params = [(128,128),
               3,
               ]
+    m = baseModel(params[0], params[1], matlab = True)
     
-    vars_ = []
-    var_z = []
-    m = baseModel(params[0], params[1])
+    nps = m.npsMatlab()
     
-    c = m.NPS(2.8)
     
     
 # =============================================================================

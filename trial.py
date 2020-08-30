@@ -16,9 +16,10 @@ Currently, this class only supports generation of 2D images.
 from baseModel import baseModel
 import numpy as np
 import matplotlib.pyplot as plt
+import scipy.io as sio
 
 class trial(baseModel):
-    def __init__(self, dim, p, sr, c, mu, sigma,):
+    def __init__(self, dim, p, sr, c, mu, sigma, matlab = False):
         '''
         Magic Method.
 
@@ -49,7 +50,7 @@ class trial(baseModel):
         None.
         
         '''
-        super().__init__(dim, sr)
+        super().__init__(dim, sr, matlab = matlab)
         self.d = dim
         self.p = p 
         self.sr = sr
@@ -59,9 +60,14 @@ class trial(baseModel):
         self.rc = int(dim[0]/2)
         self.cc = int(dim[1]/2)
         self.signal = c * super().diskSignal(normalize = False) 
-        self.npsv = sigma * super().NPS(p)
-        
-    def noiseImg(self):
+        if self.mat:
+            assert p == 2.8
+            self.npsv = super().NPS(p)
+        else:
+            self.npsv = sigma * super().NPS(p)
+            
+            
+    def noiseImg(self,):
         '''
         Generate a background image of uniform gray levels with noise added on
         top of it. The noise can be white noise or filtered depending on the
@@ -123,7 +129,7 @@ class trial(baseModel):
             
         return(row,col)
     
-    def addSignal(self, row = None, col = None, **kwargs):
+    def addSignal(self, im, sig, row, col,):
         '''
         Add the signal profile to a background template with additive noise.
 
@@ -144,17 +150,8 @@ class trial(baseModel):
         
         '''
         
-        if 'im' not in kwargs.keys():
-            im = self.noiseImg()
-        else:
-            im = kwargs['im']
-        
-        if 'sig' not in kwargs.keys():
-            sig = self.signal
-            row, col = self.diskInBounds(row = row, col = col)
-        else:
-            sig = kwargs['sig']
-            
+        row, col = self.diskInBounds(row = row, col = col)
+
         max_r = self.dim[0] - 1
         max_c = self.dim[1] - 1
         d_r = self.rc

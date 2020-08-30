@@ -18,9 +18,9 @@ import scipy.linalg as sci
 import pandas as pd
 
 class CHO(ChannelFilters):
-    def __init__(self, d, p, sr, c, ppd, mu, sigma):
-        super().__init__(d, sr)
-        self.trial = trial(d, p, sr, c, mu, sigma,)
+    def __init__(self, d, p, sr, c, ppd, mu, sigma, matlab = False):
+        super().__init__(d, sr, matlab = matlab)
+        self.trial = trial(d, p, sr, c, mu, sigma,matlab = self.mat)
         self.d = d
         self.ppd = ppd
         self.p = p
@@ -166,6 +166,15 @@ class CHO(ChannelFilters):
         new_p['Wf'] = np.fft.fft2(np.fft.fftshift(w)) #template fourier domain
         return(new_p)
         
+   
+    
+   
+    
+   
+    
+   
+    
+   
     def choDp(self, **kwargs):
         dp_channels = np.sqrt((kwargs['Vhot'].T@kwargs['K^-1']@kwargs['Vhot']))
         

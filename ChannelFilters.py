@@ -14,7 +14,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 class ChannelFilters(baseModel):
-    def __init__(self, dimensions, radius):
+    def __init__(self, dimensions, radius, matlab = False):
         '''
         Initialize the channel filters for the CHO model.
 
@@ -30,7 +30,7 @@ class ChannelFilters(baseModel):
         None.
 
         '''
-        super().__init__(dimensions,radius)
+        super().__init__(dimensions,radius, matlab = matlab)
     
     def normChannels(self, channel):
         return (channel/np.sum(channel))
